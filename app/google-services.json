@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "558997357235",
+    "firebase_url": "https://smartdispensernew-a8762-default-rtdb.firebaseio.com",
+    "project_id": "smartdispensernew-a8762",
+    "storage_bucket": "smartdispensernew-a8762.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:558997357235:android:397c80e99d24d20b20a6c6",
+        "android_client_info": {
+          "package_name": "com.example.test1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCU9KjXwqPjtdJQLkH9XiPaHAry6GaW_ZY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
