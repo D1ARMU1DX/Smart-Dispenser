@@ -48,15 +48,19 @@ public class HomeScreen extends AppCompatActivity {
     TextView text;
     FirebaseDatabase database;
     DatabaseReference reference;
-    SharedPreferences sharedPreferences;
     private long pressedTime;
+    private static final String SHARED_PREFS = "sharedPrefs";
+    public static final String PROGRESS = "progress";
+    public static final String TARGET = "target";
+    public static final String REMINDER = "reminder";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home_screen);
 
-//        showNextReminder = findViewById(R.id.showNextReminder);
+        // Initialize UI elements
+        showNextReminder = findViewById(R.id.showNextReminder);
         showProgress = findViewById(R.id.showProgress);
         showDrinkTarget = findViewById(R.id.showDrinkTarget);
         showTargetReminder = findViewById(R.id.showTargetReminder);
@@ -66,17 +70,32 @@ public class HomeScreen extends AppCompatActivity {
         settings = findViewById(R.id.settings);
         text = findViewById(R.id.text);
 
+        // Initialize Firebase and retrieve the UID
         database = FirebaseDatabase.getInstance();
         reference = database.getReference("users");
         String UID = Objects.requireNonNull(FirebaseAuth.getInstance().getCurrentUser()).getUid();
 
-        sharedPreferences = getSharedPreferences("Data", MODE_PRIVATE);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU){
-            if (ContextCompat.checkSelfPermission(HomeScreen.this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED){
+        // Check for notification permissions (you might want to handle this differently)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(HomeScreen.this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(HomeScreen.this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
         }
+
+        // Load data from Shared Preferences
+        SharedPreferences sharedPreferences = getSharedPreferences(SHARED_PREFS, MODE_PRIVATE);
+        int progress = sharedPreferences.getInt(PROGRESS, 0);
+        int target = sharedPreferences.getInt(TARGET, 0);
+        int reminder = sharedPreferences.getInt(REMINDER, 0);
+
+        // Set text for UI elements
+        String progressText = getString(R.string.progress_label, progress);
+        String drinkTargetText = getString(R.string.drink_target_label, target);
+        String reminderText = getString(R.string.reminder_label, reminder);
+
+        showProgress.setText(progressText);
+        showDrinkTarget.setText(drinkTargetText);
+        showTargetReminder.setText(reminderText);
 
         reference.child(UID).addValueEventListener(new ValueEventListener() {
             @Override
@@ -85,29 +104,56 @@ public class HomeScreen extends AppCompatActivity {
                 int target = Integer.parseInt(String.valueOf(snapshot.child("targetDrink").getValue()));
                 int reminder = Integer.parseInt(String.valueOf(snapshot.child("targetReminder").getValue()));
 
+                // Update Shared Preferences
                 SharedPreferences.Editor editor = sharedPreferences.edit();
-                editor.putInt("PROGRESS", progress);
-                editor.putInt("TARGET", target);
-                editor.putInt("REMINDER", reminder);
+                editor.putInt(PROGRESS, progress);
+                editor.putInt(TARGET, target);
+                editor.putInt(REMINDER, reminder);
                 editor.apply();
 
-                String progressText = getString(R.string.progress_label, progress);
-                String drinkTargetText = getString(R.string.drink_target_label, target);
-                String reminderText = getString(R.string.reminder_label, reminder);
-
+                // Schedule repeating alarms (if needed) based on the 'reminder' value
                 scheduleRepeatingAlarm(reminder);
-                checkNextReminderTime(UID, reminder, reminderText);//
+                // Get the current time and midnight
+                LocalTime now = LocalTime.now();
+                LocalTime midnight = LocalTime.of(0, 0); // 00:00
+                final LocalTime[] nextReminder = {now.plusHours(reminder / 60).plusMinutes(reminder % 60)};
+                String nowStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
+                String midnightStr = midnight.toString();
+                final String[] nextReminderStr = {nextReminder[0].format(DateTimeFormatter.ofPattern("HH:mm"))};
 
-                showProgress.setText(progressText);
-                showDrinkTarget.setText(drinkTargetText);
-                showTargetReminder.setText(reminderText);
 
+                Handler handler = new Handler(Looper.getMainLooper());
+                Runnable runnableCode = new Runnable() {
+                    @Override
+                    public void run() {
+                        // Midnight
+                        if (nowStr.equals(midnightStr)) {
+                            reference.child(UID).child("progress").setValue(0);
+                            nextReminder[0] = LocalTime.of(5, 0); // 05:00
+                            nextReminderStr[0] = nextReminder[0].toString();
+                        }
+
+                        // Compare the current time with the next reminder time
+                        if (nowStr.equals(nextReminderStr[0])) {
+                            // Handle the case when the times are equal, e.g., show a notification
+                            nextReminder[0] = nextReminder[0].plusHours(reminder / 60).plusMinutes(reminder % 60);
+                            nextReminderStr[0] = nextReminder[0].toString();
+                        }
+
+                        // Schedule the code to run again after a delay (e.g., every minute)
+                        handler.postDelayed(this, 60 * 1000);
+
+                        showNextReminder.setText(nextReminderStr[0]);
+                    }
+                };
+                handler.post(runnableCode);
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
                 Toast.makeText(HomeScreen.this, "Failed to retrieve data", Toast.LENGTH_SHORT).show();
             }
+
         });
 
         drinkTarget.setOnClickListener(new View.OnClickListener() {
@@ -122,7 +168,7 @@ public class HomeScreen extends AppCompatActivity {
                         .setPositiveButton("OK", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialogInterface, int i) {
-                                String valTargetDrink = editText.getText().toString();
+                                String valTargetDrink = String.valueOf(editText.getText());
                                 String UID = Objects.requireNonNull(FirebaseAuth.getInstance().getCurrentUser()).getUid();
                                 int value = Integer.parseInt(valTargetDrink);
 
@@ -159,7 +205,7 @@ public class HomeScreen extends AppCompatActivity {
                                         .setPositiveButton("OK", new DialogInterface.OnClickListener() {
                                             @Override
                                             public void onClick(DialogInterface dialogInterface, int i) {
-                                                String valAddDrink = editText.getText().toString();
+                                                String valAddDrink = String.valueOf(editText.getText());
                                                 String progress = String.valueOf(dataSnapshot.child("progress").getValue());
                                                 String UID = Objects.requireNonNull(FirebaseAuth.getInstance().getCurrentUser()).getUid();
                                                 int value = Integer.parseInt(valAddDrink);
@@ -203,7 +249,6 @@ public class HomeScreen extends AppCompatActivity {
             public void onClick(View view) {
                 Intent intent = new Intent(HomeScreen.this, SettingsScreen.class);
                 startActivity(intent);
-
             }
         });
     }
@@ -231,6 +276,7 @@ public class HomeScreen extends AppCompatActivity {
         }
         pressedTime = System.currentTimeMillis();
     }
+
     private void scheduleRepeatingAlarm(int reminderInt) {
         AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
 
@@ -244,43 +290,6 @@ public class HomeScreen extends AppCompatActivity {
 
         alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, triggerTime, intervalMillis, alarmIntent);
     }
-    private String checkNextReminderTime(String UID, int reminderInt, String nextReminderStr) {
-        final Handler handler = new Handler(Looper.getMainLooper());
-        Runnable runnableCode = new Runnable() {
-            @Override
-            public void run() {
-                // Get the current time
-                LocalTime now = LocalTime.now();
-                LocalTime midnight = LocalTime.of(0, 0); // 00:00
-                LocalTime nextReminder = LocalTime.now().plusHours(reminderInt / 60).plusMinutes(reminderInt % 60);
-                String nowStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
-                String midnightStr = midnight.toString();
-                String nextReminderStr = nextReminder.toString();
-
-                // Midnight
-                if (nowStr.equals(midnightStr)) {
-                    reference.child(UID).child("progress").setValue(0);
-                    nextReminder = LocalTime.of(5, 0); // 05:00
-                    nextReminderStr = nextReminder.toString();
-                }
-
-                // Compare the current time with the next reminder time
-                if (nowStr.equals(nextReminder.toString())) {
-                    // Handle the case when the times are equal, e.g., show a notification
-                    nextReminder = nextReminder.plusHours(reminderInt / 60).plusMinutes(reminderInt % 60);
-                    nextReminderStr = nextReminder.toString();
-                }
-
-                // Schedule the code to run again after a delay (e.g., every minute)
-                handler.postDelayed(this, 60 * 1000); // 1 minute
-            }
-        };
-        handler.post(runnableCode);
-        // Return the calculated nextReminderStr
-        return nextReminderStr;
-    }
-
-
 }
 
 

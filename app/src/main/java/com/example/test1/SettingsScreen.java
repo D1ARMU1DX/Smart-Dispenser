@@ -14,10 +14,6 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Locale;
 import java.util.Objects;
 
 public class SettingsScreen extends AppCompatActivity {
@@ -27,8 +23,6 @@ public class SettingsScreen extends AppCompatActivity {
     FirebaseDatabase database;
     DatabaseReference reference;
     public static final String SHARED_PREFS = "sharedPrefs";
-    public static final String HOUR = "HH";
-    public static final String MIN = "mm";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,15 +53,7 @@ public class SettingsScreen extends AppCompatActivity {
                 String UID = Objects.requireNonNull(FirebaseAuth.getInstance().getCurrentUser()).getUid();
                 reference.child(UID).child("targetReminder").setValue(targetReminder);
 
-                Date dateAndTime = Calendar.getInstance().getTime();
-                SimpleDateFormat currH = new SimpleDateFormat("HH", Locale.getDefault());
-                SimpleDateFormat currM = new SimpleDateFormat("mm", Locale.getDefault());
-                String nowH = currH.format(dateAndTime);
-                String nowM = currM.format(dateAndTime);
-
                 Intent intent = new Intent(getApplicationContext(), HomeScreen.class);
-                intent.putExtra(HOUR, nowH);
-                intent.putExtra(MIN, nowM);
                 startActivity(intent);
                 finish();
             }

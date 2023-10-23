@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
@@ -14,6 +15,7 @@ public class AlarmReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         // Handle the alarm trigger here
+        Log.d("AlarmReceiver", "Received alarm broadcast");
         showNotification(context);
     }
 
@@ -24,7 +26,7 @@ public class AlarmReceiver extends BroadcastReceiver {
                 .setContentTitle("Drink Bro")
                 .setContentText("Udah jam segini")
                 .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
 
         Intent intent = new Intent(context, HomeScreen.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
