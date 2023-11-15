@@ -2,14 +2,14 @@ package com.example.test1;
 
 import android.Manifest;
 import android.app.AlarmManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageView;
@@ -37,7 +37,7 @@ import com.google.zxing.integration.android.IntentResult;
 import java.util.Objects;
 
 public class HomeScreen extends AppCompatActivity {
-    TextView showNextReminder, showProgress, showDrinkTarget, showTargetReminder;
+    TextView showProgress, showDrinkTarget, showTargetReminder;
     ImageView drinkTarget, manualAdd, scanQR, settings;
     TextView text;
     FirebaseDatabase database;
@@ -51,7 +51,6 @@ public class HomeScreen extends AppCompatActivity {
         setContentView(R.layout.activity_home_screen);
 
         // Initialize UI elements
-        showNextReminder = findViewById(R.id.showNextReminder);
         showProgress = findViewById(R.id.showProgress);
         showDrinkTarget = findViewById(R.id.showDrinkTarget);
         showTargetReminder = findViewById(R.id.showTargetReminder);
@@ -88,14 +87,14 @@ public class HomeScreen extends AppCompatActivity {
         showDrinkTarget.setText(drinkTargetText);
         showTargetReminder.setText(reminderText);
 
+        createNotificationChannel();
+        scheduleRepeatingAlarm(reminder);
+
         // Start the NotificationService (if it's not already running)
         Intent serviceIntent = new Intent(HomeScreen.this, NotificationService.class);
         serviceIntent.putExtra("reminder", reminder);
         serviceIntent.putExtra("UID", UID);
         startService(serviceIntent);
-
-        // Set up the AlarmReceiver to trigger notifications at specified intervals
-        scheduleRepeatingAlarm(reminder);
 
         reference.child(UID).addValueEventListener(new ValueEventListener() {
             @Override
@@ -111,36 +110,18 @@ public class HomeScreen extends AppCompatActivity {
                 editor.putInt("REMINDER", reminder);
                 editor.apply();
 
-                // Start the NotificationService (if it's not already running)
+                showProgress.setText(progressText);
+                showDrinkTarget.setText(drinkTargetText);
+                showTargetReminder.setText(reminderText);
+
                 Intent serviceIntent = new Intent(HomeScreen.this, NotificationService.class);
+                serviceIntent.putExtra("reminder", reminder);
                 startService(serviceIntent);
 
 //                LocalTime now = LocalTime.now();
 //                final LocalTime[] nextReminder = {now.plusHours(reminder / 60).plusMinutes(reminder % 60)};
 //                String nowStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
 //                final String[] nextReminderStr = {nextReminder[0].format(DateTimeFormatter.ofPattern("HH:mm"))};
-//
-//                Handler handler = new Handler(Looper.getMainLooper());
-//                Runnable runnableCode = new Runnable() {
-//                    @Override
-//                    public void run() {
-//                        // Compare the current time with the next reminder time
-//                        if (nowStr.equals(nextReminderStr[0])) {
-//                            // Handle the case when the times are equal, e.g., show a notification
-//                            nextReminder[0] = nextReminder[0].plusHours(reminder / 60).plusMinutes(reminder % 60);
-//                            nextReminderStr[0] = nextReminder[0].toString();
-//
-//                            // Show the notification here (you may want to call a function for this)
-////                            showNotification();
-//                        }
-//
-//                        // Schedule the code to run again after a delay (e.g., every minute)
-//                        handler.postDelayed(this, reminder * 60 * 1000);
-//
-//                        showNextReminder.setText(nextReminderStr[0]);
-//                    }
-//                };
-//                handler.post(runnableCode);
             }
 
             @Override
@@ -221,14 +202,26 @@ public class HomeScreen extends AppCompatActivity {
         IntentResult intentResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
         if (intentResult != null){
             String contents = intentResult.getContents();
+            database = FirebaseDatabase.getInstance();
+            String UID = Objects.requireNonNull(FirebaseAuth.getInstance().getCurrentUser()).getUid();
             if (contents != null){
-                text.setText(intentResult.getContents());
+                if (intentResult.getContents().equals("disp1")){
+                    reference = database.getReference("disp1");
+
+                    reference.child("now").setValue(UID);
+                }
+                if (intentResult.getContents().equals("disp2")){
+                    reference = database.getReference("disp2");
+
+                    reference.child("now").setValue(UID);
+                }
             }
         }
         else {
             super.onActivityResult(requestCode, resultCode, data);
         }
     }
+
     @Override
     public void onBackPressed() {
         if (pressedTime + 2000 > System.currentTimeMillis()) {
@@ -239,16 +232,29 @@ public class HomeScreen extends AppCompatActivity {
         }
         pressedTime = System.currentTimeMillis();
     }
-    private void scheduleRepeatingAlarm(int reminder) {
-        AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-        Intent alarmIntent = new Intent(this, AlarmReceiver.class);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, alarmIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
-        // Calculate the alarm trigger time in milliseconds (every 'reminder' minutes)
-        long intervalMillis = reminder * 60 * 1000;
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "DispenserChannel";
+            String description = "Description";
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel channel = new NotificationChannel("notify", name, importance);
+            channel.setDescription(description);
 
-        // Set the alarm to trigger every 'reminder' minutes, starting immediately
-        alarmManager.setInexactRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime(), intervalMillis, pendingIntent);
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
+    private void scheduleRepeatingAlarm(int intervalMinutes) {
+        Intent intent = new Intent(this, AlarmReceiver.class);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+
+        long intervalMillis = (long) intervalMinutes * 60 * 1000; // Convert minutes to milliseconds
+
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), intervalMillis, pendingIntent);
     }
 }
 

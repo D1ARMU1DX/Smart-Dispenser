@@ -3,13 +3,10 @@ package com.example.test1;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
 
 public class NotificationService extends Service {
-    private static final int ALARM_INTERVAL_MINUTES = 1; // Set your desired interval in minutes
-
     @Override
     public void onCreate() {
         super.onCreate();
@@ -17,7 +14,8 @@ public class NotificationService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        scheduleRepeatingAlarm();
+        int reminder = intent.getIntExtra("reminder", 0); // Retrieve the reminder value
+        scheduleRepeatingAlarm(reminder);
         return START_STICKY;
     }
 
@@ -26,15 +24,16 @@ public class NotificationService extends Service {
         return null;
     }
 
-    private void scheduleRepeatingAlarm() {
-        AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+    private void scheduleRepeatingAlarm(int reminder) {
         Intent intent = new Intent(this, AlarmReceiver.class);
-        PendingIntent alarmIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
-        long intervalMillis = ALARM_INTERVAL_MINUTES * 60 * 1000;
-        long triggerTime = System.currentTimeMillis();
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
 
-        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, triggerTime, intervalMillis, alarmIntent);
+        long intervalMillis = reminder * 60 * 1000; // Convert minutes to milliseconds
+
+        // Set the repeating alarm with the specified interval and ensure it fires even if the device is asleep
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), intervalMillis, pendingIntent);
     }
 }
 
